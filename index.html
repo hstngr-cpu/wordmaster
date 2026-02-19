@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WordMaster">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon192.png">
+<title>WordMaster Quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #0f0f1a;
+  --surface:  #1a1a2e;
+  --card:     #16213e;
+  --accent:   #e94560;
+  --accent2:  #0f3460;
+  --gold:     #f5a623;
+  --green:    #00e676;
+  --text:     #eef2ff;
+  --muted:    #6b7280;
+  --border:   rgba(255,255,255,0.07);
+  --radius:   18px;
+  --font-h:   'Syne', sans-serif;
+  --font-b:   'DM Sans', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { height:100%; overflow:hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-b);
+  overscroll-behavior: none;
+}
+
+/* ── Noise texture overlay ── */
+body::before {
+  content:'';
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity: 0.4;
+}
+
+/* ── Screens ── */
+.screen {
+  position: fixed; inset:0; z-index:1;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+  opacity:0; pointer-events:none;
+  transition: opacity .3s ease, transform .3s ease;
+  transform: translateY(12px);
+}
+.screen.active {
+  opacity:1; pointer-events:all; transform:translateY(0);
+}
+
+/* ── HOME ── */
+#home {
+  background: radial-gradient(ellipse 80% 60% at 50% 20%, #1a1040 0%, var(--bg) 70%);
+  align-items: center; justify-content: center; gap: 0;
+  padding: 40px 24px 24px;
+}
+
+.home-glow {
+  position:absolute; top:-60px; left:50%; transform:translateX(-50%);
+  width:300px; height:300px; border-radius:50%;
+  background: radial-gradient(circle, rgba(233,69,96,.25) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+.home-logo {
+  font-family: var(--font-h);
+  font-size: 52px; font-weight: 800;
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, #fff 30%, var(--accent));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 6px; text-align:center;
+}
+.home-sub {
+  font-size: 13px; color: var(--muted); text-align:center; margin-bottom: 40px;
+  letter-spacing:.5px; text-transform:uppercase;
+}
+
+.stats-row {
+  display: flex; gap: 12px; width: 100%; max-width:340px; margin-bottom:32px;
+}
+.stat-card {
+  flex:1; background: var(--surface); border:1px solid var(--border);
+  border-radius: 16px; padding:16px 12px; text-align:center;
+}
+.stat-num  { font-family:var(--font-h); font-size:28px; font-weight:800; color:var(--accent); }
+.stat-lbl  { font-size:11px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:.4px; }
+
+.btn-stack { display:flex; flex-direction:column; gap:10px; width:100%; max-width:340px; }
+
+.btn {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  padding:16px 20px; border:none; border-radius:var(--radius);
+  font-family:var(--font-b); font-size:15px; font-weight:600;
+  cursor:pointer; transition:all .18s; letter-spacing:.2px;
+}
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 8px 32px rgba(233,69,96,.35);
+}
+.btn-primary:active { transform:scale(.97); box-shadow:0 4px 16px rgba(233,69,96,.25); }
+
+.btn-secondary {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-secondary:active { transform:scale(.97); background:var(--card); }
+
+.btn-ghost {
+  background: transparent; color: var(--muted);
+  font-size:13px; padding:10px;
+}
+
+.sync-status {
+  margin-top:16px; font-size:12px; color:var(--muted);
+  text-align:center; min-height:18px;
+}
+.sync-status.ok  { color:var(--green); }
+.sync-status.err { color:var(--accent); }
+
+/* ── WORD LIST ── */
+#wordlist { background: var(--bg); padding:0; }
+
+.topbar {
+  position:sticky; top:0; z-index:10;
+  background: rgba(15,15,26,.9);
+  backdrop-filter: blur(16px);
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.topbar-row { display:flex; align-items:center; gap:12px; }
+.back-btn {
+  background:none; border:none; color:var(--text);
+  font-size:22px; cursor:pointer; padding:2px 6px;
+  display:flex; align-items:center;
+}
+.topbar h2 { font-family:var(--font-h); font-size:20px; font-weight:700; flex:1; }
+.word-count { font-size:12px; color:var(--muted); background:var(--surface); padding:3px 10px; border-radius:20px; }
+
+.search-wrap {
+  margin-top:10px;
+  background: var(--surface); border-radius:12px;
+  display:flex; align-items:center; gap:8px; padding:0 14px;
+  border: 1px solid var(--border);
+}
+.search-wrap input {
+  flex:1; background:none; border:none; outline:none;
+  color:var(--text); font-family:var(--font-b); font-size:14px;
+  padding:12px 0;
+}
+.search-wrap input::placeholder { color:var(--muted); }
+.search-wrap span { color:var(--muted); font-size:16px; }
+
+.word-items { padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
+.word-card {
+  background: var(--surface); border-radius:14px;
+  padding:14px 16px; border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  animation: slideIn .2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.word-en { font-family:var(--font-h); font-size:17px; font-weight:700; }
+.word-tr { font-size:14px; color:var(--accent); font-weight:500; margin-top:2px; }
+.word-date { font-size:10px; color:var(--muted); margin-top:3px; }
+.word-badge { font-size:18px; }
+
+.empty-state {
+  text-align:center; padding:60px 20px;
+  color:var(--muted); font-size:14px; line-height:1.8;
+}
+.empty-state .big { font-size:48px; margin-bottom:12px; }
+
+/* ── QUIZ SETUP ── */
+#quiz-setup { background:var(--bg); padding:0; }
+
+.setup-body { padding:20px 20px; }
+.setup-body h3 { font-family:var(--font-h); font-size:22px; font-weight:800; margin-bottom:4px; }
+.setup-body p  { color:var(--muted); font-size:13px; margin-bottom:24px; }
+
+.option-group { margin-bottom:20px; }
+.option-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:10px; display:block; }
+
+.option-chips { display:flex; gap:8px; flex-wrap:wrap; }
+.chip {
+  padding:10px 18px; border-radius:100px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--muted); font-size:13px; font-weight:600;
+  cursor:pointer; transition:all .15s;
+  font-family:var(--font-b);
+}
+.chip.selected {
+  border-color: var(--accent);
+  background: rgba(233,69,96,.15);
+  color: var(--text);
+}
+
+/* ── QUIZ GAME ── */
+#quiz-game { background:var(--bg); justify-content:space-between; }
+
+.quiz-top { padding:20px 20px 0; }
+
+.progress-info {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:12px;
+}
+.progress-info span { font-size:13px; color:var(--muted); font-weight:500; }
+.score-pill {
+  background:var(--surface); border-radius:100px; padding:4px 14px;
+  font-size:13px; font-weight:700;
+}
+.score-correct { color:var(--green); }
+.score-wrong   { color:var(--accent); }
+
+.progress-track {
+  height:4px; background:var(--surface); border-radius:2px; overflow:hidden;
+}
+.progress-fill {
+  height:100%; background:linear-gradient(90deg, var(--accent2), var(--accent));
+  border-radius:2px; transition:width .4s ease;
+}
+
+.quiz-card {
+  margin:20px; background:var(--card);
+  border-radius:24px; padding:28px 24px;
+  border:1px solid var(--border);
+  text-align:center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.quiz-direction {
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px;
+  color:var(--muted); margin-bottom:14px;
+}
+.quiz-word {
+  font-family:var(--font-h); font-size:36px; font-weight:800;
+  line-height:1.1; letter-spacing:-1px;
+  background: linear-gradient(135deg, #fff, #c4d0ff);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+
+.answers-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  padding:0 20px 20px;
+}
+.answer-btn {
+  padding:16px 10px; border-radius:16px;
+  border:2px solid var(--border); background:var(--surface);
+  color:var(--text); font-family:var(--font-b); font-size:14px; font-weight:600;
+  cursor:pointer; transition:all .15s; line-height:1.3; text-align:center;
+}
+.answer-btn:active:not(:disabled) { transform:scale(.96); }
+.answer-btn.correct { border-color:var(--green); background:rgba(0,230,118,.12); color:var(--green); }
+.answer-btn.wrong   { border-color:var(--accent); background:rgba(233,69,96,.12); color:var(--accent); }
+
+.feedback-bar {
+  margin:0 20px; border-radius:14px; padding:14px 18px;
+  font-size:14px; font-weight:700; text-align:center; display:none;
+  animation:slideIn .2s ease;
+}
+.feedback-bar.correct { background:rgba(0,230,118,.15); color:var(--green); display:block; border:1px solid rgba(0,230,118,.3); }
+.feedback-bar.wrong   { background:rgba(233,69,96,.15);  color:var(--accent); display:block; border:1px solid rgba(233,69,96,.3); }
+
+.next-btn {
+  margin:12px 20px 0; width:calc(100% - 40px);
+  padding:16px; border:none; border-radius:var(--radius);
+  background:var(--accent); color:white;
+  font-family:var(--font-b); font-size:15px; font-weight:700;
+  cursor:pointer; display:none; transition:all .15s;
+  box-shadow:0 8px 24px rgba(233,69,96,.3);
+}
+.next-btn:active { transform:scale(.97); }
+
+/* ── RESULTS ── */
+#quiz-results {
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, #1a0f2e 0%, var(--bg) 70%);
+  align-items:center; justify-content:center; text-align:center; padding:40px 24px;
+}
+
+.result-emoji { font-size:72px; margin-bottom:16px; animation:bounce .6s ease; }
+@keyframes bounce { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+
+.result-score {
+  font-family:var(--font-h); font-size:64px; font-weight:800;
+  background:linear-gradient(135deg, var(--gold), var(--accent));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  letter-spacing:-2px; margin-bottom:6px;
+}
+.result-label  { font-size:22px; font-weight:700; margin-bottom:8px; }
+.result-sub    { font-size:14px; color:var(--muted); margin-bottom:40px; }
+.result-btn-stack { display:flex; flex-direction:column; gap:10px; width:100%; max-width:320px; }
+
+/* ── Loading spinner ── */
+.spinner {
+  width:20px; height:20px; border:2px solid rgba(255,255,255,.2);
+  border-top-color:white; border-radius:50%;
+  animation:spin .7s linear infinite; display:inline-block;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ── Install banner ── */
+#install-banner {
+  position:fixed; bottom:0; left:0; right:0; z-index:100;
+  background:var(--surface); border-top:1px solid var(--border);
+  padding:14px 20px; display:none;
+  align-items:center; gap:12px;
+  backdrop-filter:blur(10px);
+}
+#install-banner p   { flex:1; font-size:13px; color:var(--muted); }
+#install-banner p b { color:var(--text); }
+.install-btn {
+  background:var(--accent); color:white; border:none;
+  padding:10px 18px; border-radius:100px; font-size:13px; font-weight:700;
+  cursor:pointer;
+}
+.dismiss-btn {
+  background:none; border:none; color:var(--muted);
+  font-size:20px; cursor:pointer; padding:4px;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ HOME ══════════════════════════════════════════ -->
+<div class="screen active" id="home">
+  <div class="home-glow"></div>
+
+  <div class="home-logo">WordMaster</div>
+  <div class="home-sub">İngilizce → Türkçe Quiz</div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-words">0</div>
+      <div class="stat-lbl">Kelime</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-best">—</div>
+      <div class="stat-lbl">En İyi %</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-quizzes">0</div>
+      <div class="stat-lbl">Quiz</div>
+    </div>
+  </div>
+
+  <div class="btn-stack">
+    <button class="btn btn-primary" id="start-quiz-btn">
+      🎯 Quiz Başlat
+    </button>
+    <button class="btn btn-secondary" id="view-words-btn">
+      📚 Kelimelerim
+    </button>
+    <button class="btn btn-secondary" id="sync-btn">
+      <span id="sync-icon">🔄</span> Telegram'dan Güncelle
+    </button>
+  </div>
+  <div class="sync-status" id="sync-status"></div>
+  <button class="btn btn-ghost" id="manual-btn" style="margin-top:8px;font-size:11px">
+    + JSON ile manuel ekle
+  </button>
+</div>
+
+<!-- ══ WORD LIST ══════════════════════════════════════ -->
+<div class="screen" id="wordlist">
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="back-btn" data-back="home">←</button>
+      <h2>Sözlüğüm</h2>
+      <span class="word-count" id="wl-count">0 kelime</span>
+    </div>
+    <div class="search-wrap">
+      <span>🔍</span>
+      <input type="text" id="wl-search" placeholder="Ara...">
+    </div>
+  </div>
+  <div class="word-items" id="word-items"></div>
+</div>
+
+<!-- ══ QUIZ SETUP ══════════════════════════════════════ -->
+<div class="screen" id="quiz-setup">
+  <div class="topbar">
+    <div class="topbar-row">
+      <button class="back-btn" data-back="home">←</button>
+      <h2>Quiz Ayarları</h2>
+    </div>
+  </div>
+  <div class="setup-body">
+    <div class="option-group">
+      <span class="option-label">Yön</span>
+      <div class="option-chips">
+        <button class="chip selected" data-group="mode" data-val="en-tr">🇬🇧 → 🇹🇷</button>
+        <button class="chip" data-group="mode" data-val="tr-en">🇹🇷 → 🇬🇧</button>
+        <button class="chip" data-group="mode" data-val="mixed">🔀 Karışık</button>
+      </div>
+    </div>
+    <div class="option-group">
+      <span class="option-label">Soru Sayısı</span>
+      <div class="option-chips">
+        <button class="chip selected" data-group="count" data-val="10">10</button>
+        <button class="chip" data-group="count" data-val="20">20</button>
+        <button class="chip" data-group="count" data-val="all">Hepsi</button>
+      </div>
+    </div>
+    <div class="option-group">
+      <span class="option-label">Şık Sayısı</span>
+      <div class="option-chips">
+        <button class="chip" data-group="choices" data-val="2">2</button>
+        <button class="chip selected" data-group="choices" data-val="4">4</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="begin-quiz-btn" style="margin-top:8px">
+      🚀 Başla
+    </button>
+  </div>
+</div>
+
+<!-- ══ QUIZ GAME ══════════════════════════════════════ -->
+<div class="screen" id="quiz-game">
+  <div class="quiz-top">
+    <div class="progress-info">
+      <span id="q-prog">1 / 10</span>
+      <span class="score-pill">
+        <span class="score-correct" id="q-correct">✓ 0</span>
+        &nbsp;
+        <span class="score-wrong" id="q-wrong">✗ 0</span>
+      </span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="q-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="quiz-card">
+    <div class="quiz-direction" id="q-dir">İngilizce → Türkçe</div>
+    <div class="quiz-word" id="q-word">—</div>
+  </div>
+
+  <div class="answers-grid" id="q-answers"></div>
+  <div class="feedback-bar" id="q-feedback"></div>
+  <button class="next-btn" id="q-next">Sonraki →</button>
+</div>
+
+<!-- ══ RESULTS ══════════════════════════════════════ -->
+<div class="screen" id="quiz-results">
+  <div class="result-emoji" id="r-emoji">🏆</div>
+  <div class="result-score" id="r-score">8/10</div>
+  <div class="result-label" id="r-label">Harika!</div>
+  <div class="result-sub"   id="r-sub">Devam edin!</div>
+  <div class="result-btn-stack">
+    <button class="btn btn-primary" id="r-retry">🔄 Tekrar Dene</button>
+    <button class="btn btn-secondary" id="r-setup">⚙️ Ayarlar</button>
+    <button class="btn btn-secondary" id="r-home">🏠 Ana Sayfa</button>
+  </div>
+</div>
+
+<!-- Install Banner -->
+<div id="install-banner">
+  <p>📲 <b>Ana ekrana ekle</b> — çevrimdışı çalışır!</p>
+  <button class="install-btn" id="install-btn">Ekle</button>
+  <button class="dismiss-btn" id="dismiss-install">✕</button>
+</div>
+
+<!-- Manual JSON input (hidden) -->
+<textarea id="json-input" style="display:none"></textarea>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG — Extension'ın kullandığı aynı bot
+// ═══════════════════════════════════════════
+const BOT_TOKEN = "8463363566:AAE6FXlJVAYKvhcyS1mlVCXPOgd1dU0BVXI";
+const CHAT_ID   = "1127850434";
+const API       = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const DICT_TAG  = "#WORDMASTER_DICT";
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let dictionary = JSON.parse(localStorage.getItem("wm_dict") || "[]");
+let stats      = JSON.parse(localStorage.getItem("wm_stats") || '{"quizzes":0,"best":0}');
+let quizWords  = [], quizIndex = 0, quizCorrect = 0, quizWrong = 0;
+let quizMode   = "en-tr", quizCount = 10, quizChoices = 4;
+let currentMode = "en-tr"; // per-question in mixed
+
+// ═══════════════════════════════════════════
+// SCREEN ROUTING
+// ═══════════════════════════════════════════
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+document.querySelectorAll("[data-back]").forEach(btn => {
+  btn.addEventListener("click", () => show(btn.dataset.back));
+});
+
+// ═══════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════
+function updateHome() {
+  document.getElementById("stat-words").textContent   = dictionary.length;
+  document.getElementById("stat-quizzes").textContent = stats.quizzes;
+  document.getElementById("stat-best").textContent    = stats.best > 0 ? stats.best + "%" : "—";
+}
+updateHome();
+
+document.getElementById("start-quiz-btn").addEventListener("click", () => {
+  if (dictionary.length < 4) {
+    setSync("err", "Quiz için en az 4 kelime gerekli!");
+    return;
+  }
+  show("quiz-setup");
+});
+
+document.getElementById("view-words-btn").addEventListener("click", () => {
+  renderWordList("");
+  show("wordlist");
+});
+
+// Telegram Sync
+// URL parametresinden otomatik yükle (?dict=TELEGRAPH_PATH)
+(async function checkUrlParam() {
+  const params = new URLSearchParams(window.location.search);
+  const dictPath = params.get("dict");
+  if (dictPath) {
+    setSync("", "⏳ Sözlük yükleniyor...");
+    await loadFromTelegraph(dictPath);
+    // URL'yi temizle (bir daha yüklemesin)
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+})();
+
+document.getElementById("sync-btn").addEventListener("click", () => {
+  // Manuel Telegraph path girişi
+  const path = prompt("Telegraph sözlük adresini girin:
+(Extension'ın gösterdiği QR koddaki link)
+
+Örnek: WordMaster-Dictionary-01-15");
+  if (path) {
+    const clean = path.replace("https://telegra.ph/", "").trim();
+    loadFromTelegraph(clean);
+  }
+});
+
+async function loadFromTelegraph(path) {
+  const btn = document.getElementById("sync-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Yükleniyor...';
+  setSync("", "⏳ Sözlük indiriliyor...");
+
+  try {
+    const res  = await fetch(`https://api.telegra.ph/getPage/${path}?return_content=true`);
+    const data = await res.json();
+
+    if (!data.ok) throw new Error("Telegraph sayfası bulunamadı: " + data.error);
+
+    // İlk paragraftaki base64 veriyi çıkar
+    const nodes   = data.result?.content || [];
+    let   b64data = "";
+    for (const node of nodes) {
+      if (node.tag === "p" && Array.isArray(node.children) && node.children[0]) {
+        b64data = node.children[0];
+        break;
+      }
+    }
+    if (!b64data) throw new Error("Sözlük verisi bulunamadı.");
+
+    const jsonStr = decodeURIComponent(escape(atob(b64data)));
+    const newDict = JSON.parse(jsonStr);
+
+    if (Array.isArray(newDict) && newDict.length > 0) {
+      dictionary = newDict;
+      localStorage.setItem("wm_dict", JSON.stringify(dictionary));
+      localStorage.setItem("wm_lastPath", path);
+      updateHome();
+      setSync("ok", `✓ ${dictionary.length} kelime yüklendi!`);
+    } else {
+      throw new Error("Geçersiz sözlük formatı.");
+    }
+  } catch(e) {
+    setSync("err", "Hata: " + e.message);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🔄</span> Telegram'dan Güncelle';
+}
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🔄</span> Telegram\'dan Güncelle';
+}
+
+function setSync(type, msg) {
+  const el = document.getElementById("sync-status");
+  el.className = "sync-status " + type;
+  el.textContent = msg;
+}
+
+// Manuel JSON
+document.getElementById("manual-btn").addEventListener("click", () => {
+  const json = prompt("Kelime listesi JSON'ını yapıştırın:\n(Extension'ın dışa aktardığı format)");
+  if (!json) return;
+  try {
+    const data = JSON.parse(json);
+    const arr  = Array.isArray(data) ? data : data.dictionary;
+    if (arr && arr.length > 0) {
+      dictionary = arr;
+      localStorage.setItem("wm_dict", JSON.stringify(dictionary));
+      updateHome();
+      setSync("ok", `✓ ${dictionary.length} kelime eklendi!`);
+    }
+  } catch { setSync("err", "Geçersiz JSON"); }
+});
+
+// ═══════════════════════════════════════════
+// WORD LIST
+// ═══════════════════════════════════════════
+document.getElementById("wl-search").addEventListener("input", (e) => {
+  renderWordList(e.target.value);
+});
+
+function renderWordList(query) {
+  const q    = query.toLowerCase().trim();
+  const list = q ? dictionary.filter(e =>
+    e.word.toLowerCase().includes(q) || e.translation.toLowerCase().includes(q)
+  ) : dictionary;
+
+  document.getElementById("wl-count").textContent = `${list.length} kelime`;
+
+  const container = document.getElementById("word-items");
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="big">🔍</div>${q ? "Sonuç bulunamadı" : "Sözlük boş.<br>Extension'dan kelime ekleyip Telegram'a gönderin."}</div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(e => `
+    <div class="word-card">
+      <div>
+        <div class="word-en">${esc(e.word)}</div>
+        <div class="word-tr">${esc(e.translation)}</div>
+        ${e.addedAt ? `<div class="word-date">${new Date(e.addedAt).toLocaleDateString("tr-TR")}</div>` : ""}
+      </div>
+      <div class="word-badge">📖</div>
+    </div>
+  `).join("");
+}
+
+// ═══════════════════════════════════════════
+// QUIZ SETUP
+// ═══════════════════════════════════════════
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll(`.chip[data-group="${chip.dataset.group}"]`).forEach(c => c.classList.remove("selected"));
+    chip.classList.add("selected");
+  });
+});
+
+document.getElementById("begin-quiz-btn").addEventListener("click", () => {
+  quizMode    = document.querySelector('.chip.selected[data-group="mode"]').dataset.val;
+  const cVal  = document.querySelector('.chip.selected[data-group="count"]').dataset.val;
+  quizChoices = parseInt(document.querySelector('.chip.selected[data-group="choices"]').dataset.val);
+  quizCount   = cVal === "all" ? dictionary.length : Math.min(parseInt(cVal), dictionary.length);
+
+  startQuiz();
+});
+
+// ═══════════════════════════════════════════
+// QUIZ GAME
+// ═══════════════════════════════════════════
+function startQuiz() {
+  quizWords   = shuffle([...dictionary]).slice(0, quizCount);
+  quizIndex   = 0;
+  quizCorrect = 0;
+  quizWrong   = 0;
+  show("quiz-game");
+  showQuestion();
+}
+
+function showQuestion() {
+  const entry = quizWords[quizIndex];
+  currentMode = quizMode === "mixed" ? (Math.random() < .5 ? "en-tr" : "tr-en") : quizMode;
+  const isEnTr    = currentMode === "en-tr";
+  const qWord     = isEnTr ? entry.word : entry.translation;
+  const correct   = isEnTr ? entry.translation : entry.word;
+
+  document.getElementById("q-dir").textContent  = isEnTr ? "🇬🇧 İngilizce → 🇹🇷 Türkçe" : "🇹🇷 Türkçe → 🇬🇧 İngilizce";
+  document.getElementById("q-word").textContent  = qWord;
+  document.getElementById("q-prog").textContent  = `${quizIndex + 1} / ${quizWords.length}`;
+  document.getElementById("q-fill").style.width  = `${(quizIndex / quizWords.length) * 100}%`;
+  document.getElementById("q-correct").textContent = `✓ ${quizCorrect}`;
+  document.getElementById("q-wrong").textContent   = `✗ ${quizWrong}`;
+  document.getElementById("q-feedback").className  = "feedback-bar";
+  document.getElementById("q-next").style.display  = "none";
+
+  // Seçenekler
+  const wrongs = shuffle(
+    dictionary.filter(e => e.word !== entry.word)
+      .map(e => isEnTr ? e.translation : e.word)
+  ).slice(0, quizChoices - 1);
+
+  const options = shuffle([correct, ...wrongs]);
+
+  const grid = document.getElementById("q-answers");
+  grid.style.gridTemplateColumns = quizChoices === 2 ? "1fr" : "1fr 1fr";
+  grid.innerHTML = options.map(opt => `
+    <button class="answer-btn" data-ans="${esc(opt)}" data-correct="${esc(correct)}">
+      ${esc(opt)}
+    </button>
+  `).join("");
+
+  grid.querySelectorAll(".answer-btn").forEach(btn => {
+    btn.addEventListener("click", () => handleAnswer(btn, correct));
+  });
+}
+
+function handleAnswer(btn, correct) {
+  const isCorrect = btn.dataset.ans === correct;
+
+  document.querySelectorAll(".answer-btn").forEach(b => {
+    b.disabled = true;
+    if (b.dataset.ans === correct) b.classList.add("correct");
+    else if (b === btn && !isCorrect) b.classList.add("wrong");
+  });
+
+  const fb = document.getElementById("q-feedback");
+  if (isCorrect) {
+    quizCorrect++;
+    fb.textContent = "✓ Doğru! Harika! 🎉";
+    fb.className   = "feedback-bar correct";
+    vibrate([50]);
+  } else {
+    quizWrong++;
+    fb.textContent = `✗ Yanlış! Doğru: "${correct}"`;
+    fb.className   = "feedback-bar wrong";
+    vibrate([100, 50, 100]);
+  }
+
+  document.getElementById("q-correct").textContent = `✓ ${quizCorrect}`;
+  document.getElementById("q-wrong").textContent   = `✗ ${quizWrong}`;
+
+  const nextBtn = document.getElementById("q-next");
+  nextBtn.textContent  = quizIndex + 1 >= quizWords.length ? "📊 Sonuçlar" : "Sonraki →";
+  nextBtn.style.display = "block";
+}
+
+document.getElementById("q-next").addEventListener("click", () => {
+  quizIndex++;
+  if (quizIndex >= quizWords.length) showResults();
+  else showQuestion();
+});
+
+// ═══════════════════════════════════════════
+// RESULTS
+// ═══════════════════════════════════════════
+function showResults() {
+  const total = quizWords.length;
+  const pct   = Math.round((quizCorrect / total) * 100);
+
+  stats.quizzes++;
+  if (pct > stats.best) stats.best = pct;
+  localStorage.setItem("wm_stats", JSON.stringify(stats));
+  updateHome();
+
+  let emoji, label, sub;
+  if (pct >= 90) { emoji="🏆"; label="Mükemmel!";     sub="Gerçek bir kelime ustasısınız!"; }
+  else if (pct>=70){emoji="⭐"; label="Çok İyi!";     sub="Az kaldı, devam edin!"; }
+  else if (pct>=50){emoji="💪"; label="İyi Başlangıç"; sub="Tekrar çalışın, başarırsınız!"; }
+  else             {emoji="📚"; label="Çalışma Zamanı";sub="Kelimeleri tekrar gözden geçirin."; }
+
+  document.getElementById("r-emoji").textContent = emoji;
+  document.getElementById("r-score").textContent = `${quizCorrect}/${total}`;
+  document.getElementById("r-label").textContent = label;
+  document.getElementById("r-sub").textContent   = `${pct}% doğru • ${sub}`;
+
+  show("quiz-results");
+}
+
+document.getElementById("r-retry").addEventListener("click", startQuiz);
+document.getElementById("r-setup").addEventListener("click", () => show("quiz-setup"));
+document.getElementById("r-home").addEventListener("click",  () => { updateHome(); show("home"); });
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function shuffle(arr) { return arr.sort(() => Math.random() - .5); }
+function vibrate(pattern) { navigator.vibrate?.(pattern); }
+function esc(t) {
+  const d = document.createElement("div");
+  d.textContent = t;
+  return d.innerHTML;
+}
+
+// ═══════════════════════════════════════════
+// PWA INSTALL
+// ═══════════════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const banner = document.getElementById("install-banner");
+  banner.style.display = "flex";
+});
+
+document.getElementById("install-btn").addEventListener("click", async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById("install-banner").style.display = "none";
+});
+
+document.getElementById("dismiss-install").addEventListener("click", () => {
+  document.getElementById("install-banner").style.display = "none";
+});
+
+// ═══════════════════════════════════════════
+// SERVICE WORKER
+// ═══════════════════════════════════════════
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
